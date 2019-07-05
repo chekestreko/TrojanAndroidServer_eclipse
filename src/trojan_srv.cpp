@@ -26,15 +26,24 @@ std::map<int, std::string> mapReadLineFromFD;
 std::vector<pollfd> vecPollFDs;
 Clients clients;
 
-void HandleConnectionClose(int iFD) {
-	close(iFD);
-	mapReadLineFromFD.erase(iFD);
-	for (std::vector<pollfd>::iterator it = vecPollFDs.begin(); it != vecPollFDs.end(); ++it) {
-		if (it->fd == iFD) {
-			vecPollFDs.erase(it);
-			break;
+std::vector<int> vecFDs2Close;
+
+void CloseFDs() {
+	for(const auto& iFD : vecFDs2Close) {
+		close(iFD);
+		mapReadLineFromFD.erase(iFD);
+		for (std::vector<pollfd>::iterator it = vecPollFDs.begin(); it != vecPollFDs.end(); ++it) {
+			if (it->fd == iFD) {
+				vecPollFDs.erase(it);
+				break;
+			}
 		}
 	}
+	vecFDs2Close.clear();
+}
+
+void AddFD2BeClosed(int iFD) {
+	vecFDs2Close.push_back(iFD);
 }
 
 void SendData2Client(const int iFD, const std::string& str_buf) {
@@ -43,7 +52,7 @@ void SendData2Client(const int iFD, const std::string& str_buf) {
 	ssize_t sent_all = 0, sent = 0;
 	auto lambdaFD_close = [iFD]() {
 		clients.RemoveClientBySockFD(iFD);
-		HandleConnectionClose(iFD);
+		AddFD2BeClosed(iFD);
 	};
 	const ssize_t dataSize = str_buf.length();
 	while (sent_all < dataSize) {
@@ -150,7 +159,7 @@ void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int inde
 			} else {
 				std::cout << "unknown client" << std::endl;
 			}
-			HandleConnectionClose(vecPollFDs[index].fd);
+			AddFD2BeClosed(vecPollFDs[index].fd);
 			break;
 		} else {	//read a data
 			if (byteRead == '\n') {
@@ -163,7 +172,7 @@ void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int inde
 						clients.PrintPrompt();
 				} else {
 					if (auto iFD_replaced = clients.AddClient(Client(strLine, vecPollFDs[index].fd)))
-						HandleConnectionClose(*iFD_replaced);
+						AddFD2BeClosed(*iFD_replaced);
 				}
 				strLine = "";
 			} else {
@@ -222,6 +231,10 @@ int main() {
 				continue;
 			if (vecPollFDs[i].revents != POLLIN) {
 				printf("Error! vecPollFDs[%d].revents = %d\n", i, vecPollFDs[i].revents);
+				if (vecPollFDs[i].revents & POLLERR) {
+					clients.RemoveClientBySockFD(vecPollFDs[i].fd);
+					AddFD2BeClosed(vecPollFDs[i].fd);
+				}
 				continue;
 			}
 
@@ -233,6 +246,7 @@ int main() {
 				ReadDataFromClient(vecPollFDs, i);
 			}
 		}
+		CloseFDs();
 	}
 	return 0;
 }

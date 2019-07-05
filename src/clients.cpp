@@ -40,10 +40,10 @@ void Clients::RemoveClientBySockFD(const int iSockFD) {
 	for (std::vector<Client>::iterator it = vecClients.begin(); it != vecClients.end(); ++it)
 		if (it->GetSocketFD() == iSockFD) {
 			bool bDeletedActiveClient = GetActiveClient()->get().iSockFD == iSockFD;
+			PrintInfo("removed client:" + it->GetStrID());
 			vecClients.erase(it);
 			if (bDeletedActiveClient)
 				activeClientID = (vecClients.size() > 0) ? (vecClients[0].GetStrID()) : ("");
-			PrintPrompt();
 			return;
 		}
 }
