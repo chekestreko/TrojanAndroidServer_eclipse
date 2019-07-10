@@ -3,8 +3,9 @@
 #include <unistd.h>
 #include <iostream>
 
-Client::Client(std::string _strID, int _iSock) :
+Client::Client(const std::string& _strID, int _iSock, const sockaddr_in _sa_in) :
 		strID(_strID), iSockFD(_iSock) {
+	vecConnEndPointsAndTimes.push_back({std::chrono::system_clock::now(), _sa_in});
 }
 void Client::ResetSocket(int fd) {
 	close(fd);
@@ -13,8 +14,9 @@ void Client::ResetSocket(int fd) {
 int Client::GetSocketFD() const {
 	return iSockFD;
 }
-void Client::ReplaceSocketFD(int iNewSockFD) {
+void Client::ReplaceSocketFD(int iNewSockFD, const sockaddr_in _sa_in) {
 	iSockFD = iNewSockFD;
+	vecConnEndPointsAndTimes.push_back({std::chrono::system_clock::now(), _sa_in});
 }
 std::string Client::GetStrID() const {
 	return strID;

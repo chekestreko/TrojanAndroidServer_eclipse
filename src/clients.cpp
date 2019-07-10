@@ -11,8 +11,7 @@ size_t Clients::GetClientCount() {
 
 void Clients::PrintClients() {
 	for (auto&& it : vecClients) {
-		std::cout << it << std::string(":") << std::endl;
-		it.DumpCommunication();
+		std::cout << it << std::endl;
 		std::cout << std::endl;
 	}
 	PrintPrompt();
@@ -22,9 +21,9 @@ std::optional<int> Clients::AddClient(const Client& c_new) {
 	for (auto&& c_exist : vecClients) {
 		if (c_exist.GetStrID() == c_new.GetStrID()) {
 			//if we already have a client with a such ID, then just replace an existing one
-			std::cout << "Client replaced: " << c_exist << std::endl;
 			int iOldFD = c_exist.GetSocketFD();
-			c_exist.ReplaceSocketFD(c_new.GetSocketFD());
+			c_exist.ReplaceSocketFD(c_new.GetSocketFD(), c_new.GetConnectionsInfo()[0].sa_in);
+			std::cout << "Client replaced: " << c_exist << std::endl;
 			return iOldFD;
 		}
 	}
@@ -71,7 +70,9 @@ std::optional<std::reference_wrapper<Client>> Clients::GetActiveClient() {
 }
 
 void Clients::SetActiveClient(std::string strID) {
-	if (FindClientByID(strID) != vecClients.end()) {
+	auto c = FindClientByID(strID);
+	if (c != vecClients.end()) {
+		c->DumpCommunication();
 		activeClientID = strID;
 	} else {
 		std::cout << std::string("no such client") << std::endl;

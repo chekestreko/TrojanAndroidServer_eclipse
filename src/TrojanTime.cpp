@@ -10,3 +10,12 @@ std::string CurrentTime()
     ss << std::put_time(std::localtime(&in_time_t), "%F %T");
     return ss.str();
 }
+
+std::string PrintTime(const std::chrono::time_point<std::chrono::system_clock>& time)
+{
+    auto in_time_t = std::chrono::system_clock::to_time_t(time);
+
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&in_time_t), "%F %T");
+    return ss.str();
+}
