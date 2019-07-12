@@ -18,9 +18,9 @@ public:
 	void PrintPrompt() {
 		auto activeClient = GetActiveClient();
 		if (activeClient)
-			std::cout << activeClient->get().GetStrID() << std::string(">") << std::flush;
+			std::cout << activeClient->get().GetStrID() << ">" << std::flush;
 		else
-			std::cout << std::string("no active client") << std::string(">") << std::flush;
+			std::cout << "no active client" << ">" << std::flush;
 	}
 	void PrintInfo(const std::string& str) {
 		std::cout << std::endl << str << std::endl;

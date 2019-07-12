@@ -139,7 +139,7 @@ void AddNewIncomingConnection(std::vector<pollfd>& vecPollFDs, unsigned int inde
 			break;
 		}
 		mapReadLineFromFD[new_sd].sa_in = sa_in;
-		clients.PrintInfo(std::string("Incoming connection, fd=") + std::to_string(new_sd));
+		clients.PrintInfo("Incoming connection, fd=" + std::to_string(new_sd));
 		SetFDnoneBlocking(new_sd);
 		vecPollFDs.push_back(pollfd { new_sd, POLLIN });
 	} while (true);
@@ -203,15 +203,6 @@ void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int inde
 }
 
 void HandleStdinRead() {
-	/*char ch='!';
-	 read(STDIN_FILENO, &ch, 1);
-	 if(ch == 0x1b) {
-	 read(STDIN_FILENO, &ch, 1);
-	 read(STDIN_FILENO, &ch, 1);
-	 std::cout<<"0x"<<std::hex<<(int)ch<<std::endl;
-	 return;
-	 }*/
-
 	std::string str;
 	std::getline(std::cin, str);
 	if (str == "#") {
@@ -238,7 +229,7 @@ void HandleStdinRead() {
 int main() {
 	const int port = 18650;
 	int sockListen = SetupListenSoket(port);
-	std::cout<<std::string("server started at: ")<<CurrentTime()<<std::string(", listening on port ")<<port<<std::endl;
+	std::cout<< "server started at: " << CurrentTime() << ", listening on port " << port << std::endl;
 	vecPollFDs = {pollfd {STDIN_FILENO, POLLIN}, pollfd {sockListen, POLLIN}};
 
 	while (true) {

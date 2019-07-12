@@ -31,10 +31,10 @@ void Client::DumpCommunication() {
 	for (auto&& t : vecTxtRecords) {
 		switch (t.GetTextType()) {
 		case sent:
-			std::cout << std::string(">");
+			std::cout << ">";
 			break;
 		case received:
-			std::cout << std::string("<");
+			std::cout << "<";
 			break;
 		}
 		std::cout << t << std::endl;

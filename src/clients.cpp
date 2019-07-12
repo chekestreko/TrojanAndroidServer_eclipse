@@ -77,7 +77,7 @@ void Clients::SetActiveClient(std::string strID) {
 		c->DumpCommunication();
 		activeClientID = strID;
 	} else {
-		std::cout << std::string("no such client") << std::endl;
+		std::cout << "no such client" << std::endl;
 	}
 	PrintPrompt();
 }
