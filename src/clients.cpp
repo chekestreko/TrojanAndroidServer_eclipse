@@ -36,15 +36,17 @@ std::optional<int> Clients::AddClient(const Client& c_new) {
 }
 
 void Clients::RemoveClientBySockFD(const int iSockFD) {
-	for (std::vector<Client>::iterator it = vecClients.begin(); it != vecClients.end(); ++it)
+	for (std::vector<Client>::iterator it = vecClients.begin(); it != vecClients.end(); ++it) {
 		if (it->GetSocketFD() == iSockFD) {
 			bool bDeletedActiveClient = GetActiveClient()->get().iSockFD == iSockFD;
-			PrintInfo("removed client:" + it->GetStrID());
+			std::string strRemovedClient = it->GetStrID();
 			vecClients.erase(it);
 			if (bDeletedActiveClient)
 				activeClientID = (vecClients.size() > 0) ? (vecClients[0].GetStrID()) : ("");
+			PrintInfo("removed client:" + strRemovedClient);
 			return;
 		}
+	}
 }
 
 std::optional<std::reference_wrapper<Client>> Clients::FindClientBySockFD(const int iSockFD) {

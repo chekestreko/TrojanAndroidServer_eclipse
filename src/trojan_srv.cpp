@@ -52,7 +52,7 @@ void AddFD2BeClosed(int iFD) {
 }
 
 void SendData2Client(const int iFD, const std::string& str_buf) {
-	//we write to a non blocking socket, thus such a complicated stuff with EWOULDBLOCK and poll
+	//we write to a non blocking socket, thats why such a complicated stuff with EWOULDBLOCK and poll
 	//write timeout is set to 10 seconds
 	ssize_t sent_all = 0, sent = 0;
 	auto lambdaFD_close = [iFD]() {
@@ -145,6 +145,12 @@ void AddNewIncomingConnection(std::vector<pollfd>& vecPollFDs, unsigned int inde
 	} while (true);
 }
 
+void ClearLineAndGoToBegin() {
+	char clear_line[] = "\033[2K";
+	char line_up[] = "\033[1A";
+	std::cout << clear_line << std::endl << line_up;
+}
+
 void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int index) {
 	auto client = clients.FindClientBySockFD(vecPollFDs[index].fd);
 	do {
@@ -176,8 +182,13 @@ void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int inde
 				if (client) {
 					auto activeClient = clients.GetActiveClient();
 					client->get().AddReceivedText(strLine, activeClient);
-					if (client->get().GetStrID() == activeClient->get().GetStrID())
+					if (client->get().GetStrID() == activeClient->get().GetStrID()) {
+						ClearLineAndGoToBegin();
+						std::cout << client->get().GetStrID() << std::string("(") <<
+								CurrentTime() << std::string(")") <<
+								std::string("<") << strLine << std::string("\n") << std::flush;
 						clients.PrintPrompt();
+					}
 				} else {
 					if (auto iFD_replaced = clients.AddClient(Client(strLine, vecPollFDs[index].fd,
 							mapReadLineFromFD[vecPollFDs[index].fd].sa_in)))

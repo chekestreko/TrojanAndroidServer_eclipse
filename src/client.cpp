@@ -25,13 +25,6 @@ void Client::AddSentText(const std::string& str) {
 	vecTxtRecords.push_back(TxtRecord(str, enTxtType::sent));
 }
 void Client::AddReceivedText(const std::string& str, std::optional<std::reference_wrapper<Client>> activeClient) {
-	if (activeClient) {
-		if (strID == std::optional<std::reference_wrapper<Client>> { activeClient }->get().GetStrID()) {
-			std::cout << std::endl << strID << std::string("(") << CurrentTime() << std::string(")") <<
-					std::string("<") << str << std::string("\n") << std::flush;
-		}
-	}
-
 	vecTxtRecords.push_back(TxtRecord(str, enTxtType::received));
 }
 void Client::DumpCommunication() {
