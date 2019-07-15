@@ -15,17 +15,9 @@ public:
 	std::vector<Client>::iterator FindClientByID(const std::string strClientID);
 	std::optional<std::reference_wrapper<Client>> GetActiveClient();
 	void SetActiveClient(std::string strID);
-	void PrintPrompt() {
-		auto activeClient = GetActiveClient();
-		if (activeClient)
-			std::cout << activeClient->get().GetStrID() << ">" << std::flush;
-		else
-			std::cout << "no active client" << ">" << std::flush;
-	}
-	void PrintInfo(const std::string& str) {
-		std::cout << std::endl << str << std::endl;
-		PrintPrompt();
-	}
+	void PrintPrompt();
+	void PrintInfo(const std::string& str);
+	bool IsClientActive(const Client& c);
 private:
 	std::string activeClientID;
 	std::vector<Client> vecClients;

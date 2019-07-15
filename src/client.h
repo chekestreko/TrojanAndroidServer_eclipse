@@ -18,7 +18,7 @@ public:
 	int GetSocketFD() const;
 	std::string GetStrID() const;
 	void AddSentText(const std::string& str);
-	void AddReceivedText(const std::string& str, std::optional<std::reference_wrapper<Client>> activeClient);
+	void AddReceivedText(const std::string& str);
 	friend std::ostream& operator<<(std::ostream& strm, const Client& c) {
 		strm << "'" + c.strID + "'" << std::endl;
 		for(auto&& cc : c.vecConnEndPointsAndTimes) {

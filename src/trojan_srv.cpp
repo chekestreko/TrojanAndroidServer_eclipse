@@ -19,18 +19,18 @@
 #include "TrojanTime.h"
 #include <netinet/in.h>
 
-/*
- * read from a FD (int) and save data in std::string
- * until EOL was received
- */
+/////////////////////////////////////////////////////////
+// read from a FD (int) and save data in std::string
+// until EOL was received
 struct ReadLineAndSockAddr {
 	std::string strLine;
 	sockaddr_in sa_in;
 };
 std::map<int, ReadLineAndSockAddr> mapReadLineFromFD;
+/////////////////////////////////////////////////////////
+
 std::vector<pollfd> vecPollFDs;
 Clients clients;
-
 std::vector<int> vecFDs2Close;
 
 void CloseFDs() {
@@ -151,11 +151,11 @@ void ClearLineAndGoToBegin() {
 	std::cout << clear_line << std::endl << line_up;
 }
 
-void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int index) {
-	auto client = clients.FindClientBySockFD(vecPollFDs[index].fd);
+void ReadDataFromClient(const unsigned int fd) {
+	auto client = clients.FindClientBySockFD(fd);
 	do {
 		unsigned char byteRead;
-		int rc = recv(vecPollFDs[index].fd, &byteRead, sizeof(byteRead), 0);
+		int rc = recv(fd, &byteRead, sizeof(byteRead), 0);
 		if (rc < 0) {
 			if (errno != EWOULDBLOCK) {
 				perror("  recv() failed");
@@ -166,37 +166,39 @@ void ReadDataFromClient(std::vector<pollfd>& vecPollFDs, const unsigned int inde
 			}
 			break;
 		} else if (rc == 0) {	//remote host closed a connection
-			std::cout << "  Connection closed fd=" << vecPollFDs[index].fd << std::endl;
+			std::cout << "  Connection closed fd=" << fd << std::endl;
 			if (client) {
 				std::cout << "removing client: " << client->get().GetStrID() << std::endl;
-				clients.RemoveClientBySockFD(vecPollFDs[index].fd);
+				clients.RemoveClientBySockFD(fd);
 			} else {
 				std::cout << "unknown client" << std::endl;
 			}
-			AddFD2BeClosed(vecPollFDs[index].fd);
+			AddFD2BeClosed(fd);
 			break;
 		} else {	//read a data
 			if (byteRead == '\n') {
-				std::string& strLine = mapReadLineFromFD[vecPollFDs[index].fd].strLine;
+				std::string& strLine = mapReadLineFromFD[fd].strLine;
 				//printf("readline: %s\n", strLine.c_str());
 				if (client) {
-					auto activeClient = clients.GetActiveClient();
-					client->get().AddReceivedText(strLine, activeClient);
-					if (client->get().GetStrID() == activeClient->get().GetStrID()) {
+					client->get().AddReceivedText(strLine);
+					if (clients.IsClientActive(client->get())) {
 						ClearLineAndGoToBegin();
-						std::cout << client->get().GetStrID() << std::string("(") <<
+						const std::string& strClientID = client->get().GetStrID();
+						std::cout << strClientID << std::string("(") <<
 								CurrentTime() << std::string(")") <<
 								std::string("<") << strLine << std::string("\n") << std::flush;
 						clients.PrintPrompt();
 					}
 				} else {
-					if (auto iFD_replaced = clients.AddClient(Client(strLine, vecPollFDs[index].fd,
-							mapReadLineFromFD[vecPollFDs[index].fd].sa_in)))
-						AddFD2BeClosed(*iFD_replaced);
+					auto iFD_replaced = clients.AddClient(Client(strLine, fd, mapReadLineFromFD[fd].sa_in));
+					if (iFD_replaced)
+						AddFD2BeClosed(*iFD_replaced);//client was replaced, close old FD
+					ClearLineAndGoToBegin();
+					clients.PrintPrompt();
 				}
 				strLine = "";
 			} else {
-				mapReadLineFromFD[vecPollFDs[index].fd].strLine += byteRead;
+				mapReadLineFromFD[fd].strLine += byteRead;
 			}
 		}
 	} while (true);
@@ -254,7 +256,7 @@ int main() {
 			} else if (vecPollFDs[i].fd == sockListen) {
 				AddNewIncomingConnection(vecPollFDs, i);
 			} else {
-				ReadDataFromClient(vecPollFDs, i);
+				ReadDataFromClient(vecPollFDs[i].fd);
 			}
 		}
 		CloseFDs();

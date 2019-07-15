@@ -24,7 +24,7 @@ std::string Client::GetStrID() const {
 void Client::AddSentText(const std::string& str) {
 	vecTxtRecords.push_back(TxtRecord(str, enTxtType::sent));
 }
-void Client::AddReceivedText(const std::string& str, std::optional<std::reference_wrapper<Client>> activeClient) {
+void Client::AddReceivedText(const std::string& str) {
 	vecTxtRecords.push_back(TxtRecord(str, enTxtType::received));
 }
 void Client::DumpCommunication() {

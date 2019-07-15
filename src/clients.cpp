@@ -81,3 +81,24 @@ void Clients::SetActiveClient(std::string strID) {
 	}
 	PrintPrompt();
 }
+
+void Clients::PrintPrompt() {
+	auto activeClient = GetActiveClient();
+	if (activeClient)
+		std::cout << activeClient->get().GetStrID() << ">" << std::flush;
+	else
+		std::cout << "no active client" << ">" << std::flush;
+}
+
+void Clients::PrintInfo(const std::string& str) {
+	std::cout << std::endl << str << std::endl;
+	PrintPrompt();
+}
+
+bool Clients::IsClientActive(const Client& c) {
+	auto activeClient = GetActiveClient();
+	if(activeClient && c.GetStrID() == activeClient->get().GetStrID()) {
+		return true;
+	}
+	return false;
+}
