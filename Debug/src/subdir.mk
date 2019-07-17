@@ -4,18 +4,21 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
+../src/ConnectionProxy.cpp \
 ../src/TrojanTime.cpp \
 ../src/client.cpp \
 ../src/clients.cpp \
 ../src/trojan_srv.cpp 
 
 OBJS += \
+./src/ConnectionProxy.o \
 ./src/TrojanTime.o \
 ./src/client.o \
 ./src/clients.o \
 ./src/trojan_srv.o 
 
 CPP_DEPS += \
+./src/ConnectionProxy.d \
 ./src/TrojanTime.d \
 ./src/client.d \
 ./src/clients.d \

