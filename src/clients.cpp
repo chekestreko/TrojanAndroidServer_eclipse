@@ -65,6 +65,13 @@ std::vector<Client>::iterator Clients::FindClientByID(const std::string strClien
 	return vecClients.end();
 }
 
+std::optional<std::reference_wrapper<Client>> Clients::GetClientByID(const std::string& strClientID) {
+	std::vector<Client>::iterator itC = FindClientByID(strClientID);
+	if ( vecClients.end() == itC )
+		return std::nullopt;
+	return std::optional<std::reference_wrapper<Client>> { *itC };
+}
+
 std::optional<std::reference_wrapper<Client>> Clients::GetActiveClient() {
 	if (vecClients.empty())
 		return std::nullopt;

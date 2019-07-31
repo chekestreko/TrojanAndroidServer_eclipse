@@ -11,7 +11,7 @@
 class ConnectionProxy {
 public:
 	ConnectionProxy();
-	std::vector<int> AddNewIncomingConnections(int iFD);
+	std::vector<int> AcceptIncomingConnections(int iFD);
 	void Start(const int port);
 	void Stop();
 	virtual ~ConnectionProxy();

@@ -52,7 +52,7 @@ int ConnectionProxy::SetupListenSoket(const int port) {
 	return sockListen;
 }
 
-std::vector<int> ConnectionProxy::AddNewIncomingConnections(int iListenFD) {
+std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
 	std::vector<int> v;
 	bool bReset = false;
 	do {
@@ -126,7 +126,7 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 					break;
 				}
 				if(s != r) {
-					fprintf(stderr, "s(%d) != r(%d)\n", s, r);
+					fprintf(stderr, "s(%zu) != r(%zu)\n", s, r);
 					bRun = false;
 					break;
 				}
@@ -144,6 +144,7 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 }
 
 void ConnectionProxy::Start(const int port) {
+	Stop();
 	m_efd = eventfd(0, 0);
 	t = std::thread(&ConnectionProxy::_start, this, port);
 }
@@ -153,6 +154,7 @@ void ConnectionProxy::Stop() {
 		uint64_t u;
 		write(m_efd, &u, sizeof(u));
 		t.join();
+		m_efd = -1;
 	}
 }
 
@@ -179,9 +181,9 @@ void ConnectionProxy::_start(const int port) {
 				continue;
 			}
 			if (vecPollListenFD[i].fd == sockListen) {
-				std::vector<int> v = AddNewIncomingConnections(sockListen);
+				std::vector<int> v = AcceptIncomingConnections(sockListen);
 				vConnectedSocketFDs.insert(vConnectedSocketFDs.end(), v.begin(), v.end());
-				printf("vConnectedSocketFDs.size()=%d\n", vConnectedSocketFDs.size());
+				printf("vConnectedSocketFDs.size()=%zu\n", vConnectedSocketFDs.size());
 				if(vConnectedSocketFDs.size() == 2) {//as soon as 2 clients are connected, we can start exchange
 					if(StartDataExchange(vConnectedSocketFDs)) {//returns true if eventfd was set, so we should stop
 						bRun = false;

@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <iostream>
 #include <optional>
 #include <functional>
@@ -55,12 +56,15 @@ private:
 		sockaddr_in sa_in;
 	};
 	std::vector<connect_info_t> vecConnEndPointsAndTimes;
+	std::unordered_set<std::string> setSubscribers;
 	std::string strID;
 	int iSockFD;
 public:
 	const std::vector<connect_info_t>& GetConnectionsInfo() const {
 		return vecConnEndPointsAndTimes;
 	}
+	void AddSubscriber(const Client& c);
+	const std::unordered_set<std::string>& GetSubscribers();
 };
 
 #endif /* CLIENT_H_ */

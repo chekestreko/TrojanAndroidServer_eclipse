@@ -40,3 +40,11 @@ void Client::DumpCommunication() {
 		std::cout << t << std::endl;
 	}
 }
+
+void Client::AddSubscriber(const Client& c) {
+	setSubscribers.insert(c.GetStrID());
+}
+
+const std::unordered_set<std::string>& Client::GetSubscribers() {
+	return setSubscribers;
+}

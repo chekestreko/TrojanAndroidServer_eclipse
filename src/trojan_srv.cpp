@@ -159,23 +159,34 @@ void ClearLineAndGoToBegin() {
 	std::cout << clear_line << std::endl << line_up;
 }
 
-void ParseCommand(const std::string& strLine) {
+void ParseCommand(const Client& clientFrom, const std::string& strLine) {
 	if(strLine.empty())
 		return;
 	std::istringstream iss(strLine);
 	std::vector<std::string> vecWords(
 			std::istream_iterator<std::string>{iss}, std::istream_iterator<std::string>());
 	try {
-		if(vecWords.at(0) == "proxy") {
+		if(vecWords.at(0) == "proxy") {//start connection proxy
 			if(vecWords.at(1) == "start") {
 				int port = std::stoi(vecWords.at(2));
 				connectionProxy.Start(port);
+				SendData2Client(clientFrom.GetSocketFD(), "proxy started\n");
 			} else if(vecWords.at(1) == "stop") {
 				connectionProxy.Stop();
 			} else {
 				std::cout << "Malformed proxy command" << std::endl;
 				return;
 			}
+		} else if(vecWords.at(0)[0] == '@') {//send text from clientFrom to clientTo
+			const std::string strClientTo = vecWords.at(0).substr(1);
+			auto clientTo = clients.GetClientByID(strClientTo);
+			if(clientTo) {
+				clientTo->get().AddSubscriber(clientFrom);
+				std::string strSend2Client = std::string(strLine.c_str() + vecWords.at(0).length() + 1) + "\n";
+				SendData2Client(clientTo->get().GetSocketFD(), strSend2Client);
+			}
+			else
+				SendData2Client(clientFrom.GetSocketFD(), strClientTo + " - no such client\n");
 		}
 	} catch (const std::exception& ex) {
 		std::cout << "Malformed command" << std::endl;
@@ -184,7 +195,6 @@ void ParseCommand(const std::string& strLine) {
 }
 
 void ReadDataFromClient(const unsigned int fd) {
-	auto client = clients.FindClientBySockFD(fd);
 	do {
 		unsigned char byteRead;
 		int rc = recv(fd, &byteRead, sizeof(byteRead), 0);
@@ -199,6 +209,7 @@ void ReadDataFromClient(const unsigned int fd) {
 			break;
 		} else if (rc == 0) {	//remote host closed a connection
 			std::cout << "  Connection closed fd=" << fd << std::endl;
+			auto client = clients.FindClientBySockFD(fd);
 			if (client) {
 				std::cout << "removing client: " << client->get().GetStrID() << std::endl;
 				clients.RemoveClientBySockFD(fd);
@@ -211,7 +222,7 @@ void ReadDataFromClient(const unsigned int fd) {
 			if (byteRead == '\n') {
 				std::string& strLine = mapReadLineFromFD[fd].strLine;
 				//printf("readline: %s\n", strLine.c_str());
-				client = clients.FindClientBySockFD(fd);
+				auto client = clients.FindClientBySockFD(fd);
 				if (client) {
 					client->get().AddReceivedText(strLine);
 					if (clients.IsClientActive(client->get())) {
@@ -222,7 +233,12 @@ void ReadDataFromClient(const unsigned int fd) {
 								std::string("<") << strLine << std::string("\n") << std::flush;
 						clients.PrintPrompt();
 					}
-					ParseCommand(strLine);
+					ParseCommand(client->get(), strLine);
+					for(const auto& strSubscriber : client->get().GetSubscribers()) {
+						auto cSubscr = clients.GetClientByID(strSubscriber);
+						if(cSubscr)
+							SendData2Client(cSubscr->get().GetSocketFD(), std::string(strLine) + "\n");
+					}
 				} else {
 					auto iFD_replaced = clients.AddClient(Client(strLine, fd, mapReadLineFromFD[fd].sa_in));
 					if (iFD_replaced)
