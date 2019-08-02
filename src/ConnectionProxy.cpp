@@ -72,7 +72,7 @@ std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
 			v.push_back(new_sd);
 		} while (true);
 
-		if(v.size() > 2) {//closed accepted sockets if there were more than 2
+		if(v.size() > 2) {//close all accepted sockets if there were more than 2
 			for(int fd : v)
 				close(fd);
 			v.clear();
@@ -172,24 +172,39 @@ void ConnectionProxy::_start(const int port) {
 		for (unsigned int i = 0; i < vecPollListenFD.size(); i++) {
 			if (vecPollListenFD[i].revents == 0)
 				continue;
-			if (vecPollListenFD[i].revents != POLLIN) {
+			if (vecPollListenFD[i].revents & POLLERR) {
 				printf("%s Error! vecPollFDs[%d].revents = %d\n", __PRETTY_FUNCTION__, i, vecPollListenFD[i].revents);
-				if (vecPollListenFD[i].revents & POLLERR) {
-					bRun = false;
-					break;
-				}
-				continue;
+				bRun = false;
+				break;
 			}
+
 			if (vecPollListenFD[i].fd == sockListen) {
-				std::vector<int> v = AcceptIncomingConnections(sockListen);
+				std::vector<int> v = AcceptIncomingConnections(sockListen);//can return 1 or 2
 				vConnectedSocketFDs.insert(vConnectedSocketFDs.end(), v.begin(), v.end());
-				printf("vConnectedSocketFDs.size()=%zu\n", vConnectedSocketFDs.size());
+				printf("ConnectionProxy accepted %zu incoming connections\n", vConnectedSocketFDs.size());
 				if(vConnectedSocketFDs.size() == 2) {//as soon as 2 clients are connected, we can start exchange
 					if(StartDataExchange(vConnectedSocketFDs)) {//returns true if eventfd was set, so we should stop
 						bRun = false;
 						break;
 					}
+					vConnectedSocketFDs.clear();//FDs of a connected 2 clients are already closed in StartDataExchange
+					//we do not have connected clients anymore
+					//poll only on sockListen and m_efd
+					if (vecPollListenFD.size() > 2)
+						vecPollListenFD.erase(vecPollListenFD.begin() + 2, vecPollListenFD.end());
+				} else if(vConnectedSocketFDs.size() == 1) {
+					//if first client was connected
+					//poll, not for data is ready to read, but for a connection was closed (POLLRDHUP)
+					vecPollListenFD.push_back(pollfd {vConnectedSocketFDs[0], POLLRDHUP});
+				}
+			} else if ((vConnectedSocketFDs.size() > 0) && (vecPollListenFD[i].fd == vConnectedSocketFDs[0])) {
+				if (vecPollListenFD[i].revents & POLLRDHUP) {
+					printf("proxy client fd=%d closed a connection\n", vecPollListenFD[i].fd);
+					close(vConnectedSocketFDs[0]);
 					vConnectedSocketFDs.clear();
+					vecPollListenFD.erase(vecPollListenFD.begin() + i);
+				} else {
+					fprintf(stderr, "Error vecPollListenFD[i].revents & POLLRDHUP=%d\n", vecPollListenFD[i].revents);
 				}
 			} else if (vecPollListenFD[i].fd == m_efd) {
 				bRun = false;
