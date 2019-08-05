@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <sstream>
 #include <iostream>
 #include <iterator>
@@ -141,7 +142,7 @@ void AddNewIncomingConnections(std::vector<pollfd>& vecPollFDs, unsigned int ind
 		int new_sd = accept(vecPollFDs[index].fd, (sockaddr*)&sa_in, &len);
 		if (new_sd < 0) {
 			if (errno != EWOULDBLOCK) {
-				perror("  accept() failed");
+				fprintf(stderr, "accept()=%d failed\n", errno);
 				exit(1);
 			}
 			break;//no more incoming connection in case of EWOULDBLOCK
@@ -200,7 +201,7 @@ void ReadDataFromClient(const unsigned int fd) {
 		int rc = recv(fd, &byteRead, sizeof(byteRead), 0);
 		if (rc < 0) {
 			if (errno != EWOULDBLOCK) {
-				perror("  recv() failed");
+				fprintf(stderr, "recv()=%d failed\n", errno);
 				exit(1);
 			} else {
 				if (errno == EINTR)
@@ -279,6 +280,7 @@ void HandleStdinRead() {
 }
 
 int main() {
+	signal(SIGPIPE, SIG_IGN);//if send() fails, prevent close of program by receiving SIGPIPE
 	const int port = 18650;
 	int sockListen = SetupListenSoket(port);
 	std::cout<< "server started at: " << CurrentTime() << ", listening on port " << port << std::endl;
