@@ -11,45 +11,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
+#include "NetUtils.h"
 
 ConnectionProxy::ConnectionProxy():m_efd(-1) {
-}
-
-void ConnectionProxy::SetFDnoneBlocking(int iFD) {
-	int flags = fcntl(iFD, F_GETFL, 0);
-	if (fcntl(iFD, F_SETFL, flags | O_NONBLOCK) < 0) {
-		fprintf(stderr, "Error on fcntl: %s\n", strerror(errno));
-		exit(-1);
-	}
-}
-
-int ConnectionProxy::SetupListenSoket(const int port) {
-	int sockListen = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockListen < 0) {
-		fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
-		exit(-1);
-	}
-
-	int on = 1;
-	if (setsockopt(sockListen, SOL_SOCKET, SO_REUSEADDR, (char*) &on, sizeof(on)) < 0) {
-		fprintf(stderr, "Error on setsockopt socket: %s\n", strerror(errno));
-		exit(-1);
-	}
-
-	SetFDnoneBlocking(sockListen);
-
-	struct sockaddr_in saddr = { };
-	saddr.sin_family = AF_INET;
-	saddr.sin_port = htons(port);
-
-	if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) < 0) {
-		fprintf(stderr, "Error on binding socket: %s\n", strerror(errno));
-		exit(-1);
-	}
-	int iTmp;
-	while ((-1 == (iTmp = listen(sockListen, 2))) && (EINTR == errno))
-		;
-	return sockListen;
 }
 
 std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
@@ -159,7 +123,7 @@ void ConnectionProxy::Stop() {
 }
 
 void ConnectionProxy::_start(const int port) {
-	int sockListen = SetupListenSoket(port);
+	int sockListen = NetUtils::SetupListenSoket(port, 2);
 
 	vecPollListenFD = {pollfd {sockListen, POLLIN}, pollfd {m_efd, POLLIN}};
 	std::vector<int> vConnectedSocketFDs;

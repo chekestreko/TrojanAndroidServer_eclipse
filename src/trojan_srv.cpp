@@ -16,12 +16,12 @@
 #include <optional>
 #include <functional>
 #include <unistd.h>
-#include <fcntl.h>
 #include "client.h"
 #include "clients.h"
 #include "TrojanTime.h"
 #include <netinet/in.h>
 #include "ConnectionProxy.h"
+#include "NetUtils.h"
 
 /////////////////////////////////////////////////////////
 // read from a FD (int) and save data in std::string
@@ -95,43 +95,6 @@ void SendData2Client(const int iFD, const std::string& str_buf) {
 	}
 }
 
-void SetFDnoneBlocking(int iFD) {
-	int flags = fcntl(iFD, F_GETFL, 0);
-	if (fcntl(iFD, F_SETFL, flags | O_NONBLOCK) < 0) {
-		fprintf(stderr, "Error on fcntl: %s\n", strerror(errno));
-		exit(-1);
-	}
-}
-
-int SetupListenSoket(const int port) {
-	int sockListen = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockListen < 0) {
-		fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
-		exit(-1);
-	}
-
-	int on = 1;
-	if (setsockopt(sockListen, SOL_SOCKET, SO_REUSEADDR, (char*) &on, sizeof(on)) < 0) {
-		fprintf(stderr, "Error on setsockopt socket: %s\n", strerror(errno));
-		exit(-1);
-	}
-
-	SetFDnoneBlocking(sockListen);
-
-	struct sockaddr_in saddr = { };
-	saddr.sin_family = AF_INET;
-	saddr.sin_port = htons(port);
-
-	if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) < 0) {
-		fprintf(stderr, "Error on binding socket: %s\n", strerror(errno));
-		exit(-1);
-	}
-	int iTmp;
-	while ((-1 == (iTmp = listen(sockListen, 0))) && (EINTR == errno))
-		;
-	return sockListen;
-}
-
 /*
  * accept all pending incoming connections
  */
@@ -149,7 +112,7 @@ void AddNewIncomingConnections(std::vector<pollfd>& vecPollFDs, unsigned int ind
 		}
 		mapReadLineFromFD[new_sd].sa_in = sa_in;
 		clients.PrintInfo("Incoming connection, fd=" + std::to_string(new_sd));
-		SetFDnoneBlocking(new_sd);
+		NetUtils::SetFDnoneBlocking(new_sd);
 		vecPollFDs.push_back(pollfd { new_sd, POLLIN });
 	} while (true);
 }
@@ -282,7 +245,7 @@ void HandleStdinRead() {
 int main() {
 	signal(SIGPIPE, SIG_IGN);//if send() fails, prevent close of program by receiving SIGPIPE
 	const int port = 18650;
-	int sockListen = SetupListenSoket(port);
+	int sockListen = NetUtils::SetupListenSoket(port, 0);
 	std::cout<< "server started at: " << CurrentTime() << ", listening on port " << port << std::endl;
 	vecPollFDs = {pollfd {STDIN_FILENO, POLLIN}, pollfd {sockListen, POLLIN}};
 
