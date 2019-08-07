@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include "ConnectionProxy.h"
 #include "NetUtils.h"
+#include "Journal.h"
 
 /////////////////////////////////////////////////////////
 // read from a FD (int) and save data in std::string
@@ -111,7 +112,8 @@ void AddNewIncomingConnections(std::vector<pollfd>& vecPollFDs, unsigned int ind
 			break;//no more incoming connection in case of EWOULDBLOCK
 		}
 		mapReadLineFromFD[new_sd].sa_in = sa_in;
-		clients.PrintInfo("Incoming connection, fd=" + std::to_string(new_sd));
+		Journal::get().WriteLn("incoming connection from ", sa_in, " fd=", new_sd, "\n");
+		clients.PrintPrompt();
 		NetUtils::SetFDnoneBlocking(new_sd);
 		vecPollFDs.push_back(pollfd { new_sd, POLLIN });
 	} while (true);
@@ -172,13 +174,13 @@ void ReadDataFromClient(const unsigned int fd) {
 			}
 			break;
 		} else if (rc == 0) {	//remote host closed a connection
-			std::cout << "  Connection closed fd=" << fd << std::endl;
+			Journal::get().WriteLn("connection closed fd=", fd, "\n");
 			auto client = clients.FindClientBySockFD(fd);
 			if (client) {
-				std::cout << "removing client: " << client->get().GetStrID() << std::endl;
+				Journal::get().WriteLn("removing client: ", client->get().GetStrID(), "\n");
 				clients.RemoveClientBySockFD(fd);
 			} else {
-				std::cout << "unknown client" << std::endl;
+				Journal::get().WriteLn("unknown client", "\n");
 			}
 			AddFD2BeClosed(fd);
 			break;
@@ -246,7 +248,7 @@ int main() {
 	signal(SIGPIPE, SIG_IGN);//if send() fails, prevent close of program by receiving SIGPIPE
 	const int port = 18650;
 	int sockListen = NetUtils::SetupListenSoket(port, 0);
-	std::cout<< "server started at: " << CurrentTime() << ", listening on port " << port << std::endl;
+	Journal::get().WriteLn("server started at: ", CurrentTime(), ", listening on port ", port, "\n");
 	vecPollFDs = {pollfd {STDIN_FILENO, POLLIN}, pollfd {sockListen, POLLIN}};
 
 	while (true) {
@@ -257,12 +259,9 @@ int main() {
 		for (unsigned int i = 0; i < vecPollFDs.size(); i++) {
 			if (vecPollFDs[i].revents == 0)
 				continue;
-			if (vecPollFDs[i].revents != POLLIN) {
-				printf("%s Error! vecPollFDs[%d].revents = %d\n", __PRETTY_FUNCTION__, i, vecPollFDs[i].revents);
-				if (vecPollFDs[i].revents & POLLERR) {
-					clients.RemoveClientBySockFD(vecPollFDs[i].fd);
-					AddFD2BeClosed(vecPollFDs[i].fd);
-				}
+			if (vecPollFDs[i].revents != POLLIN) {//typically POLLERR or POLLHUP received, just close that fd
+				clients.RemoveClientBySockFD(vecPollFDs[i].fd);
+				AddFD2BeClosed(vecPollFDs[i].fd);
 				continue;
 			}
 

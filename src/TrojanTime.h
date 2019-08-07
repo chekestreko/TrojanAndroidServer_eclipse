@@ -1,6 +1,8 @@
 #ifndef TROJANTIME_H_
 #define TROJANTIME_H_
 
+#include "chrono"
+
 std::string CurrentTime();
 std::string PrintTime(const std::chrono::time_point<std::chrono::system_clock>& time);
 

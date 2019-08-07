@@ -4,6 +4,7 @@
 #include <optional>
 #include <functional>
 #include "TrojanTime.h"
+#include "Journal.h"
 
 size_t Clients::GetClientCount() {
 	return vecClients.size();
@@ -32,6 +33,7 @@ std::optional<int> Clients::AddClient(const Client& c_new) {
 	if (vecClients.size() == 1)
 		activeClientID = c_new.GetStrID();
 	PrintInfo(CurrentTime() + " added new client: " + c_new.GetStrID());
+	Journal::get().WriteLn("added new client: ", c_new.GetStrID(), "\n");
 	return std::nullopt;
 }
 
@@ -44,6 +46,7 @@ void Clients::RemoveClientBySockFD(const int iSockFD) {
 			if (bDeletedActiveClient)
 				activeClientID = (vecClients.size() > 0) ? (vecClients[0].GetStrID()) : ("");
 			PrintInfo("removed client:" + strRemovedClient);
+			Journal::get().WriteLn("removed client: ", strRemovedClient, "\n");
 			return;
 		}
 	}

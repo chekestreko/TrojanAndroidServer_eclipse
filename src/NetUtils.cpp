@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 void NetUtils::SetFDnoneBlocking(int iFD) {
 	int flags = fcntl(iFD, F_GETFL, 0);
@@ -40,4 +41,9 @@ int NetUtils::SetupListenSoket(const int port, const int iListenQueue) {
 	while ((-1 == (iTmp = listen(sockListen, 2))) && (EINTR == errno))
 		;
 	return sockListen;
+}
+
+std::ostream& operator<<(std::ostream& strm, const sockaddr_in& sa_in) {
+	strm << std::string(inet_ntoa(sa_in.sin_addr)) << ":" << ntohs(sa_in.sin_port);
+	return strm;
 }

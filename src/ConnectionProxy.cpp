@@ -11,7 +11,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <inttypes.h>
 #include "NetUtils.h"
+#include "TrojanTime.h"
+#include "Journal.h"
+
+#define DBG_PRINT(...) \
+	{std::stringstream ss; ss << "ConnectionProxy(" << std::setfill(' ') << std::setw(3) << __LINE__ << "): ";\
+	Journal::get().WriteLn(ss.str(), " ", __VA_ARGS__, "\n");}
 
 ConnectionProxy::ConnectionProxy():m_efd(-1) {
 }
@@ -26,12 +35,12 @@ std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
 			int new_sd = accept(iListenFD, (sockaddr*)&sa_in, &len);
 			if (new_sd < 0) {
 				if (errno != EWOULDBLOCK) {
-					perror("  accept() failed");
+					perror("accept() failed");
 					exit(1);
 				}
 				break;//no more incoming connection in case of EWOULDBLOCK
 			}
-			printf("proxy: accepted client fd = %d\n", new_sd);
+			DBG_PRINT("accepted client ", sa_in, " fd=", new_sd);
 			//SetFDnoneBlocking(new_sd);
 			v.push_back(new_sd);
 		} while (true);
@@ -64,33 +73,37 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 			if (p[i].revents == 0)
 				continue;
 			if (p[i].revents != POLLIN) {
-				printf("Error! p[%d].revents = %d, FD=%d\n", i, p[i].revents, p[i].fd);
 				if (p[i].revents & POLLERR) {
+					DBG_PRINT("POLLERR fd=", p[i].fd, " was closed");
 					bRun = false;
 					break;
 				}
+				printf("Error! p[%d].revents = %d, FD=%d\n", i, p[i].revents, p[i].fd);
 			}
 			if (p[i].fd != m_efd) {
 				char buf[100000];
 				ssize_t r;
 				r = recv(p[i].fd, buf, sizeof(buf), 0);
 				if(r < 1) {//0=other side closed the connection, -1=error
+					DBG_PRINT("Other side of fd=", p[i].fd, " was closed(recv)");
 					bRun = false;
 					break;
 				}
 				ssize_t s;
 				//auto t1 = std::chrono::system_clock::now().time_since_epoch();
-				s = send(p[i == 0 ? 1 : 0].fd, buf, r, 0);
+				int sFD = p[i == 0 ? 1 : 0].fd;
+				s = send(sFD, buf, r, 0);
 				/*auto t2 = std::chrono::system_clock::now().time_since_epoch();
 				auto delta = t2-t1;
 				std::cout << s << " bytes " << std::chrono::duration_cast<std::chrono::microseconds>(delta).count() <<
 						"us" << std::endl;*/
 				if(s < 1) {//0=other side closed the connection, -1=error
+					DBG_PRINT("Other side of fd=", p[i].fd, " was closed(send)");
 					bRun = false;
 					break;
 				}
 				if(s != r) {
-					fprintf(stderr, "s(%zu) != r(%zu)\n", s, r);
+					DBG_PRINT("s(%zu) != r(%zu)\n", s, r);
 					bRun = false;
 					break;
 				}
@@ -103,7 +116,7 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 	}
 	close(p[0].fd);
 	close(p[1].fd);
-	printf("closed FD=%d, FD=%d\n", p[0].fd, p[1].fd);
+	DBG_PRINT("closed fds=", p[0].fd, ",", p[1].fd);
 	return bEventFD;
 }
 
@@ -117,7 +130,9 @@ void ConnectionProxy::Stop() {
 	if(m_efd != -1) {
 		uint64_t u;
 		write(m_efd, &u, sizeof(u));
+		DBG_PRINT("Stopping ConnectionProxy...");
 		t.join();
+		DBG_PRINT("ConnectionProxy...stopped");
 		m_efd = -1;
 	}
 }
@@ -145,7 +160,7 @@ void ConnectionProxy::_start(const int port) {
 			if (vecPollListenFD[i].fd == sockListen) {
 				std::vector<int> v = AcceptIncomingConnections(sockListen);//can return 1 or 2
 				vConnectedSocketFDs.insert(vConnectedSocketFDs.end(), v.begin(), v.end());
-				printf("ConnectionProxy accepted %zu incoming connections\n", vConnectedSocketFDs.size());
+				//printf("ConnectionProxy accepted %zu incoming connections\n", vConnectedSocketFDs.size());
 				if(vConnectedSocketFDs.size() == 2) {//as soon as 2 clients are connected, we can start exchange
 					if(StartDataExchange(vConnectedSocketFDs)) {//returns true if eventfd was set, so we should stop
 						bRun = false;
@@ -163,12 +178,13 @@ void ConnectionProxy::_start(const int port) {
 				}
 			} else if ((vConnectedSocketFDs.size() > 0) && (vecPollListenFD[i].fd == vConnectedSocketFDs[0])) {
 				if (vecPollListenFD[i].revents & POLLRDHUP) {
-					printf("proxy client fd=%d closed a connection\n", vecPollListenFD[i].fd);
+					DBG_PRINT("received POLLRDHUP for fd=", vecPollListenFD[i].fd);
 					close(vConnectedSocketFDs[0]);
+					DBG_PRINT("closed fd=", vConnectedSocketFDs[0]);
 					vConnectedSocketFDs.clear();
 					vecPollListenFD.erase(vecPollListenFD.begin() + i);
 				} else {
-					fprintf(stderr, "Error vecPollListenFD[i].revents & POLLRDHUP=%d\n", vecPollListenFD[i].revents);
+					fprintf(stderr, "Error vecPollListenFD[i].revents & POLLRDHUP=%d", vecPollListenFD[i].revents);
 				}
 			} else if (vecPollListenFD[i].fd == m_efd) {
 				bRun = false;
@@ -176,8 +192,10 @@ void ConnectionProxy::_start(const int port) {
 			}
 		}
 	}
-	for (int fd : vConnectedSocketFDs)
+	for (int fd : vConnectedSocketFDs) {
 		close(fd);
+		DBG_PRINT("closed fd=", fd);
+	}
 	close(sockListen);
 	close(m_efd);
 	m_efd = -1;
