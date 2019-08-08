@@ -9,7 +9,7 @@ class Clients {
 public:
 	size_t GetClientCount();
 	void PrintClients();
-	std::optional<int> AddClient(const Client& c_new);
+	std::optional<int> AddClient(Client&& c_new);
 	void RemoveClientBySockFD(const int iSockFD);
 	std::optional<std::reference_wrapper<Client>> FindClientBySockFD(const int iSockFD);
 	std::optional<std::reference_wrapper<Client>> GetClientByID(const std::string& strClientID);

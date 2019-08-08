@@ -207,7 +207,7 @@ void ReadDataFromClient(const unsigned int fd) {
 							SendData2Client(cSubscr->get().GetSocketFD(), std::string(strLine) + "\n");
 					}
 				} else {
-					auto iFD_replaced = clients.AddClient(Client(strLine, fd, mapReadLineFromFD[fd].sa_in));
+					auto iFD_replaced = clients.AddClient(std::move(Client(strLine, fd, mapReadLineFromFD[fd].sa_in)));
 					if (iFD_replaced)
 						AddFD2BeClosed(*iFD_replaced);//client was replaced, close old FD
 					ClearLineAndGoToBegin();

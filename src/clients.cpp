@@ -18,7 +18,7 @@ void Clients::PrintClients() {
 	PrintPrompt();
 }
 
-std::optional<int> Clients::AddClient(const Client& c_new) {
+std::optional<int> Clients::AddClient(Client&& c_new) {
 	for (auto&& c_exist : vecClients) {
 		if (c_exist.GetStrID() == c_new.GetStrID()) {
 			//if we already have a client with a such ID, then just replace an existing one
@@ -28,7 +28,7 @@ std::optional<int> Clients::AddClient(const Client& c_new) {
 			return iOldFD;
 		}
 	}
-	vecClients.push_back(c_new);
+	vecClients.emplace_back(c_new);
 
 	if (vecClients.size() == 1)
 		activeClientID = c_new.GetStrID();
