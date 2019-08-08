@@ -12,6 +12,16 @@ public:
 	Journal& operator=(const Journal&) = delete;
 	Journal& operator=(Journal&&) = delete;
 
+	void SetLogFile(const char* s) {
+		if(!_ofs.is_open()) {
+			_ofs.open(s, std::ofstream::out | std::ofstream::app);
+			if(!_ofs.is_open()) {
+				std::cerr << "Error open log file: " << s << std::endl;
+				exit(1);
+			}
+		}
+	}
+
 	static Journal& get() {
 		static Journal _instance;
 		return _instance;
@@ -21,11 +31,7 @@ public:
 	template<class... Args>
 	void WriteLn(Args... args) {
 		if(!_ofs.is_open())
-			_ofs.open("/tmp/trojan_srv.log", std::ofstream::out | std::ofstream::app);
-		if(!_ofs) {
-			fprintf(stderr, "Error open log file");
 			return;
-		}
 		_ofs << CurrentTime() << " ";
 		(_ofs << ... << args);
 		_ofs.flush();

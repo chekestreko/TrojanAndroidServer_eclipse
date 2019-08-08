@@ -23,6 +23,7 @@
 #include "ConnectionProxy.h"
 #include "NetUtils.h"
 #include "Journal.h"
+#include "InputParParser.h"
 
 /////////////////////////////////////////////////////////
 // read from a FD (int) and save data in std::string
@@ -244,9 +245,27 @@ void HandleStdinRead() {
 	}
 }
 
-int main() {
+std::tuple<int, std::string> ParseCmdLine(int argc, char **argv) {
+	int port = 18650;
+	InputParParser ip(argc, argv);
+	const std::string& strPort = ip.getCmdOption("-p");
+	if(!strPort.empty()) {
+		try {
+			port = std::stoi(strPort);
+		}catch(const std::exception& ex) {}
+	}
+	const std::string& strLog = ip.getCmdOption("-j");
+	if(strLog.empty()) {
+		std::cerr << "Usage example: ./trojan_srv -p 18650 -j /tmp/trojan_journal.log" << std::endl;
+		exit(1);
+	}
+	return {port, strLog};
+}
+
+int main(int argc, char **argv) {
 	signal(SIGPIPE, SIG_IGN);//if send() fails, prevent close of program by receiving SIGPIPE
-	const int port = 18650;
+	auto [port, strLogFile] = ParseCmdLine(argc, argv);
+	Journal::get().SetLogFile(strLogFile.c_str());
 	int sockListen = NetUtils::SetupListenSoket(port, 0);
 	Journal::get().WriteLn("server started at: ", CurrentTime(), ", listening on port ", port, "\n");
 	vecPollFDs = {pollfd {STDIN_FILENO, POLLIN}, pollfd {sockListen, POLLIN}};
