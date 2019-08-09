@@ -35,7 +35,7 @@ std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
 			int new_sd = accept(iListenFD, (sockaddr*)&sa_in, &len);
 			if (new_sd < 0) {
 				if (errno != EWOULDBLOCK) {
-					perror("accept() failed");
+					perror("accept() failed\n");
 					exit(1);
 				}
 				break;//no more incoming connection in case of EWOULDBLOCK
@@ -103,7 +103,7 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 					break;
 				}
 				if(s != r) {
-					DBG_PRINT("s(%zu) != r(%zu)\n", s, r);
+					DBG_PRINT("s!=r", s, "!=", r);
 					bRun = false;
 					break;
 				}
