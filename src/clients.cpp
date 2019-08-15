@@ -40,7 +40,7 @@ std::optional<int> Clients::AddClient(Client&& c_new) {
 void Clients::RemoveClientBySockFD(const int iSockFD) {
 	for (std::vector<Client>::iterator it = vecClients.begin(); it != vecClients.end(); ++it) {
 		if (it->GetSocketFD() == iSockFD) {
-			bool bDeletedActiveClient = GetActiveClient()->get().iSockFD == iSockFD;
+			bool bDeletedActiveClient = GetActiveClient_const()->get().GetSocketFD() == iSockFD;
 			std::string strRemovedClient = it->GetStrID();
 			vecClients.erase(it);
 			if (bDeletedActiveClient)
@@ -59,13 +59,9 @@ std::optional<std::reference_wrapper<Client>> Clients::FindClientBySockFD(const 
 	return std::nullopt;
 }
 
-std::vector<Client>::iterator Clients::FindClientByID(const std::string strClientID) {
-	for (std::vector<Client>::iterator it = vecClients.begin(); it != vecClients.end(); ++it) {
-		if (it->GetStrID() == strClientID) {
-			return it;
-		}
-	}
-	return vecClients.end();
+const std::vector<Client>::iterator Clients::FindClientByID(const std::string& strClientID) {
+	return std::find_if(vecClients.begin(), vecClients.end(),
+			[&strClientID](const Client& c){return c.GetStrID() == strClientID;});
 }
 
 std::optional<std::reference_wrapper<Client>> Clients::GetClientByID(const std::string& strClientID) {
@@ -81,6 +77,12 @@ std::optional<std::reference_wrapper<Client>> Clients::GetActiveClient() {
 	return std::optional<std::reference_wrapper<Client>> { *FindClientByID(activeClientID) };
 }
 
+std::optional<std::reference_wrapper<const Client>> Clients::GetActiveClient_const() {
+	if (vecClients.empty())
+		return std::nullopt;
+	return std::optional<std::reference_wrapper<const Client>> { *FindClientByID(activeClientID) };
+}
+
 void Clients::SetActiveClient(std::string strID) {
 	auto c = FindClientByID(strID);
 	if (c != vecClients.end()) {
@@ -93,7 +95,7 @@ void Clients::SetActiveClient(std::string strID) {
 }
 
 void Clients::PrintPrompt() {
-	auto activeClient = GetActiveClient();
+	auto activeClient = GetActiveClient_const();
 	if (activeClient)
 		std::cout << activeClient->get().GetStrID() << ">" << std::flush;
 	else
@@ -106,7 +108,7 @@ void Clients::PrintInfo(const std::string& str) {
 }
 
 bool Clients::IsClientActive(const Client& c) {
-	auto activeClient = GetActiveClient();
+	auto activeClient = GetActiveClient_const();
 	if(activeClient && c.GetStrID() == activeClient->get().GetStrID()) {
 		return true;
 	}

@@ -14,12 +14,13 @@ public:
 	std::optional<std::reference_wrapper<Client>> FindClientBySockFD(const int iSockFD);
 	std::optional<std::reference_wrapper<Client>> GetClientByID(const std::string& strClientID);
 	std::optional<std::reference_wrapper<Client>> GetActiveClient();
+	std::optional<std::reference_wrapper<const Client>> GetActiveClient_const();
 	void SetActiveClient(std::string strID);
 	void PrintPrompt();
 	void PrintInfo(const std::string& str);
 	bool IsClientActive(const Client& c);
 private:
-	std::vector<Client>::iterator FindClientByID(const std::string strClientID);
+	const std::vector<Client>::iterator FindClientByID(const std::string& strClientID);
 	std::string activeClientID;
 	std::vector<Client> vecClients;
 };
