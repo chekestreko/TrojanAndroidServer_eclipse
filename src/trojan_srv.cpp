@@ -162,28 +162,29 @@ void ParseCommand(const Client& clientFrom, const std::string& strLine) {
 }
 
 void ReadDataFromClient(const unsigned int fd) {
+	std::function fConnClosed = [&fd](std::string const& strLog){
+		Journal::get().WriteLn(strLog, fd, "\n");
+		auto client = clients.FindClientBySockFD(fd);
+		if (client) {
+			Journal::get().WriteLn("removing client: ", client->get().GetStrID(), "\n");
+			clients.RemoveClientBySockFD(fd);
+		} else {
+			Journal::get().WriteLn("unknown client", "\n");
+		}
+		AddFD2BeClosed(fd);
+	};
 	do {
 		unsigned char byteRead;
 		int rc = recv(fd, &byteRead, sizeof(byteRead), 0);
 		if (rc < 0) {
-			if (errno != EWOULDBLOCK) {
-				fprintf(stderr, "recv()=%d failed\n", errno);
-				exit(1);
-			} else {
-				if (errno == EINTR)
-					continue;
-			}
+			if (errno == EWOULDBLOCK)//no more data to read, just exit and poll
+				break;
+			if (errno == EINTR)
+				continue;
+			fConnClosed(std::string("Recv error errno=") + std::to_string(errno) + ", fd=");
 			break;
 		} else if (rc == 0) {	//remote host closed a connection
-			Journal::get().WriteLn("connection closed fd=", fd, "\n");
-			auto client = clients.FindClientBySockFD(fd);
-			if (client) {
-				Journal::get().WriteLn("removing client: ", client->get().GetStrID(), "\n");
-				clients.RemoveClientBySockFD(fd);
-			} else {
-				Journal::get().WriteLn("unknown client", "\n");
-			}
-			AddFD2BeClosed(fd);
+			fConnClosed(std::string("Remote peer gracefully closed a socket fd="));
 			break;
 		} else {	//read a data
 			if (byteRead == '\n') {
