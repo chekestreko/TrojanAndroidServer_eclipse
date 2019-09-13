@@ -24,7 +24,8 @@ std::optional<int> Clients::AddClient(Client&& c_new) {
 			//if we already have a client with a such ID, then just replace an existing one
 			int iOldFD = c_exist.GetSocketFD();
 			c_exist.ReplaceSocketFD(c_new.GetSocketFD(), c_new.GetConnectionsInfo()[0].sa_in);
-			std::cout << "Client replaced: " << c_exist << std::endl;
+			PrintInfo(CurrentTime() + " client replaced: " + c_new.GetStrID() + "\n");
+			Journal::get().WriteLn("client replaced: ", c_new.GetStrID(), "\n");
 			return iOldFD;
 		}
 	}
