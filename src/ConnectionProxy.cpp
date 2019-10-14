@@ -129,8 +129,9 @@ void ConnectionProxy::Start(const int port) {
 void ConnectionProxy::Stop() {
 	if(m_efd != -1) {
 		uint64_t u;
-		write(m_efd, &u, sizeof(u));
 		DBG_PRINT("Stopping ConnectionProxy...");
+		if(sizeof(u) != write(m_efd, &u, sizeof(u)))
+			DBG_PRINT("Error stopping ConnectionProxy sizeof(u) != write...");
 		t.join();
 		DBG_PRINT("ConnectionProxy...stopped");
 		m_efd = -1;
