@@ -144,7 +144,10 @@ void ParseCommand(const Client& clientFrom, const std::string& strLine) {
 				std::cout << "Malformed proxy command" << std::endl;
 				return;
 			}
-		} else if(vecWords.at(0)[0] == '@') {//send text from clientFrom to clientTo
+		} else if(vecWords.at(0) == "ping") {
+			SendData2Client(clientFrom.GetSocketFD(), "pong\n");
+		}
+		else if(vecWords.at(0)[0] == '@') {//send text from clientFrom to clientTo
 			const std::string strClientTo = vecWords.at(0).substr(1);
 			auto clientTo = clients.GetClientByID(strClientTo);
 			if(clientTo) {
