@@ -7,6 +7,7 @@
 class NetUtils {
 public:
 	static void SetFDnoneBlocking(int iFD);
+	static void SetTcpKeepAliveOnSocket(int iFD, int iKeepIdle, int iKeepIntvl);
 	static int SetupListenSoket(const int port, const int iListenQueue);
 };
 

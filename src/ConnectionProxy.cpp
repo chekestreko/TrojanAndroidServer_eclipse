@@ -17,6 +17,7 @@
 #include "NetUtils.h"
 #include "TrojanTime.h"
 #include "Journal.h"
+#include <map>
 
 #define DBG_PRINT(...) \
 	{std::stringstream ss; ss << "ConnectionProxy(" << std::setfill(' ') << std::setw(3) << __LINE__ << "): ";\
@@ -57,15 +58,18 @@ std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
 }
 
 bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
+	DBG_PRINT("Entered StartDataExchange fds=", vFDs[0], ",", vFDs[1]);
 	pollfd p[] = {pollfd {vFDs[0], POLLIN}, pollfd {vFDs[1], POLLIN}, pollfd {m_efd, POLLIN}};
 
+	std::map<int, ssize_t> mapSentBytes;
 	bool bRun = true, bEventFD = false;
 	while(bRun) {
 		int iPollRes = poll(p, sizeof(p)/sizeof(pollfd), 5000);
 		if (iPollRes < 0) {
-			fprintf(stderr, "Error %d on poll: %s\n", iPollRes, strerror(errno));
-			exit(-1);
+			DBG_PRINT("Error %d on poll: %s. Stop \n", iPollRes, strerror(errno));
+			break;
 		} else if (iPollRes == 0){//timeout
+			DBG_PRINT("poll timeout");
 			break;
 		}
 
@@ -78,7 +82,7 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 					bRun = false;
 					break;
 				}
-				printf("Error! p[%d].revents = %d, FD=%d\n", i, p[i].revents, p[i].fd);
+				DBG_PRINT("Error! p[%d].revents = %d, FD=%d\n", i, p[i].revents, p[i].fd);
 			}
 			if (p[i].fd != m_efd) {
 				char buf[100000];
@@ -102,6 +106,7 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 					bRun = false;
 					break;
 				}
+				mapSentBytes[sFD] += s;
 				if(s != r) {
 					DBG_PRINT("s!=r", s, "!=", r);
 					bRun = false;
@@ -116,17 +121,20 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 	}
 	close(p[0].fd);
 	close(p[1].fd);
-	DBG_PRINT("closed fds=", p[0].fd, ",", p[1].fd);
+	for(const auto& pair : mapSentBytes)
+		DBG_PRINT(pair.second, " Bytes sent to fd=", pair.first);
+	DBG_PRINT("Leave StartDataExchange, closed fds=", p[0].fd, ",", p[1].fd);
 	return bEventFD;
 }
 
 void ConnectionProxy::Start(const int port) {
 	Stop();
 	m_efd = eventfd(0, 0);
-	t = std::thread(&ConnectionProxy::_start, this, port);
+	t = std::thread(&ConnectionProxy::_start, this, port, 5000);
 }
 
 void ConnectionProxy::Stop() {
+	DBG_PRINT("Enter Stop");
 	if(m_efd != -1) {
 		uint64_t u;
 		DBG_PRINT("Stopping ConnectionProxy...");
@@ -135,19 +143,29 @@ void ConnectionProxy::Stop() {
 		t.join();
 		DBG_PRINT("ConnectionProxy...stopped");
 		m_efd = -1;
+	} else {
+		DBG_PRINT("not running");
 	}
+	DBG_PRINT("Leave Stop");
 }
 
-void ConnectionProxy::_start(const int port) {
+void ConnectionProxy::_start(const int port, const int iConnectionTimeout) {
+	DBG_PRINT("started thread, listen port=", port);
 	int sockListen = NetUtils::SetupListenSoket(port, 2);
 
 	vecPollListenFD = {pollfd {sockListen, POLLIN}, pollfd {m_efd, POLLIN}};
 	std::vector<int> vConnectedSocketFDs;
 	bool bRun = true;
 	while (bRun) {
-		if (poll(vecPollListenFD.data(), vecPollListenFD.size(), -1) < 1) {
-			fprintf(stderr, "Error on poll: %s\n", strerror(errno));
-			exit(-1);
+		int iPollRes = poll(vecPollListenFD.data(), vecPollListenFD.size(), iConnectionTimeout);
+		if (iPollRes < 0) {
+			DBG_PRINT("Error ", iPollRes, " on poll: %s\n", strerror(errno));
+			bRun = false;
+			break;
+		} else if (iPollRes == 0) {
+			DBG_PRINT("No client appeared within of ", iConnectionTimeout, "ms. Stopping thread...");
+			bRun = false;
+			break;
 		}
 		for (unsigned int i = 0; i < vecPollListenFD.size(); i++) {
 			if (vecPollListenFD[i].revents == 0)
@@ -199,9 +217,10 @@ void ConnectionProxy::_start(const int port) {
 	}
 	close(sockListen);
 	close(m_efd);
-	m_efd = -1;
+	DBG_PRINT("leave thread, closed FDs: sockListen=", sockListen, ", m_efd=", m_efd);
 }
 
 ConnectionProxy::~ConnectionProxy() {
+	Stop();
 }
 

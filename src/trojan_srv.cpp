@@ -116,6 +116,7 @@ void AddNewIncomingConnections(std::vector<pollfd>& vecPollFDs, unsigned int ind
 		Journal::get().WriteLn("incoming connection from ", sa_in, " fd=", new_sd, "\n");
 		clients.PrintPrompt();
 		NetUtils::SetFDnoneBlocking(new_sd);
+		NetUtils::SetTcpKeepAliveOnSocket(new_sd, 600, 600);
 		vecPollFDs.push_back(pollfd { new_sd, POLLIN });
 	} while (true);
 }

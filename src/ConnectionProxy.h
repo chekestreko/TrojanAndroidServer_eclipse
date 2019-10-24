@@ -16,7 +16,7 @@ public:
 	void Stop();
 	virtual ~ConnectionProxy();
 private:
-	void _start(const int port);
+	void _start(const int port, const int iConnectionTimeout);
 	bool StartDataExchange(std::vector<int>& vFDs);
 	int SetupListenSoket(const int port);
 	void SetFDnoneBlocking(int iFD);

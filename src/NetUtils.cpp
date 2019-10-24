@@ -4,12 +4,29 @@
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 
 void NetUtils::SetFDnoneBlocking(int iFD) {
 	int flags = fcntl(iFD, F_GETFL, 0);
 	if (fcntl(iFD, F_SETFL, flags | O_NONBLOCK) < 0) {
 		std::cerr<<"Error on fcntl:"<<strerror(errno)<<std::endl;
+		exit(-1);
+	}
+}
+
+void NetUtils::SetTcpKeepAliveOnSocket(int iFD, int iKeepIdle, int iKeepIntvl) {
+	int on = 1;
+	if (setsockopt(iFD, SOL_SOCKET, SO_KEEPALIVE, (void*) &on, sizeof(on)) < 0) {
+		fprintf(stderr, "Error on setsockopt(SO_KEEPALIVE) socket: %s\n", strerror(errno));
+		exit(-1);
+	}
+	if (setsockopt(iFD, IPPROTO_TCP, TCP_KEEPIDLE, (void*) &iKeepIdle, sizeof(iKeepIdle)) < 0) {
+		fprintf(stderr, "Error on setsockopt(TCP_KEEPIDLE) socket: %s\n", strerror(errno));
+		exit(-1);
+	}
+	if (setsockopt(iFD, IPPROTO_TCP, TCP_KEEPINTVL, (void*) &iKeepIntvl, sizeof(iKeepIntvl)) < 0) {
+		fprintf(stderr, "Error on setsockopt(SO_REUSEADDR) socket: %s\n", strerror(errno));
 		exit(-1);
 	}
 }
@@ -23,7 +40,7 @@ int NetUtils::SetupListenSoket(const int port, const int iListenQueue) {
 
 	int on = 1;
 	if (setsockopt(sockListen, SOL_SOCKET, SO_REUSEADDR, (char*) &on, sizeof(on)) < 0) {
-		fprintf(stderr, "Error on setsockopt socket: %s\n", strerror(errno));
+		fprintf(stderr, "Error on setsockopt(SO_REUSEADDR) socket: %s\n", strerror(errno));
 		exit(-1);
 	}
 
