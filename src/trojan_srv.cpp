@@ -173,7 +173,7 @@ void ReadDataFromClient(const unsigned int fd) {
 			Journal::get().WriteLn("removing client: ", client->get().GetStrID(), "\n");
 			clients.RemoveClientBySockFD(fd);
 		} else {
-			Journal::get().WriteLn("unknown client", "\n");
+			Journal::get().WriteLn("closing connection for an unknown client, fd=%d\n", fd);
 		}
 		AddFD2BeClosed(fd);
 	};

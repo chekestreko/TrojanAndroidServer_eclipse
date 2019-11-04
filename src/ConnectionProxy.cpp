@@ -26,7 +26,7 @@
 ConnectionProxy::ConnectionProxy():m_efd(-1) {
 }
 
-std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
+std::vector<int> ConnectionProxy::AcceptIncomingConnections(const int iListenFD) {
 	std::vector<int> v;
 	bool bReset = false;
 	do {
@@ -42,7 +42,7 @@ std::vector<int> ConnectionProxy::AcceptIncomingConnections(int iListenFD) {
 				break;//no more incoming connection in case of EWOULDBLOCK
 			}
 			DBG_PRINT("accepted client ", sa_in, " fd=", new_sd);
-			//SetFDnoneBlocking(new_sd);
+			NetUtils::SetFDnoneBlocking(new_sd);
 			v.push_back(new_sd);
 		} while (true);
 
@@ -89,7 +89,8 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 				ssize_t r;
 				r = recv(p[i].fd, buf, sizeof(buf), 0);
 				if(r < 1) {//0=other side closed the connection, -1=error
-					DBG_PRINT("Other side of fd=", p[i].fd, " was closed(recv)");
+					DBG_PRINT("recv error. Other side of fd=", p[i].fd,
+							(r == 0) ? " gracefully closed" : " lost", " connection, errno=", errno);
 					bRun = false;
 					break;
 				}
@@ -102,13 +103,14 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 				std::cout << s << " bytes " << std::chrono::duration_cast<std::chrono::microseconds>(delta).count() <<
 						"us" << std::endl;*/
 				if(s < 1) {//0=other side closed the connection, -1=error
-					DBG_PRINT("Other side of fd=", p[i].fd, " was closed(send)");
+					DBG_PRINT("send error. Other side of fd=", sFD,
+							(s == 0) ? " gracefully closed" : " lost", " connection, errno=", errno);
 					bRun = false;
 					break;
 				}
 				mapSentBytes[sFD] += s;
 				if(s != r) {
-					DBG_PRINT("s!=r", s, "!=", r);
+					DBG_PRINT("s!=r ", s, "!=", r);
 					bRun = false;
 					break;
 				}
@@ -130,7 +132,7 @@ bool ConnectionProxy::StartDataExchange(std::vector<int>& vFDs) {
 void ConnectionProxy::Start(const int port) {
 	Stop();
 	m_efd = eventfd(0, 0);
-	t = std::thread(&ConnectionProxy::_start, this, port, 5000);
+	m_t = std::thread(&ConnectionProxy::_start, this, port, 5000);
 }
 
 void ConnectionProxy::Stop() {
@@ -140,7 +142,7 @@ void ConnectionProxy::Stop() {
 		DBG_PRINT("Stopping ConnectionProxy...");
 		if(sizeof(u) != write(m_efd, &u, sizeof(u)))
 			DBG_PRINT("Error stopping ConnectionProxy sizeof(u) != write...");
-		t.join();
+		m_t.join();
 		DBG_PRINT("ConnectionProxy...stopped");
 		m_efd = -1;
 	} else {
@@ -153,11 +155,11 @@ void ConnectionProxy::_start(const int port, const int iConnectionTimeout) {
 	DBG_PRINT("started thread, listen port=", port);
 	int sockListen = NetUtils::SetupListenSoket(port, 2);
 
-	vecPollListenFD = {pollfd {sockListen, POLLIN}, pollfd {m_efd, POLLIN}};
+	m_vecPollListenFD = {pollfd {sockListen, POLLIN}, pollfd {m_efd, POLLIN}};
 	std::vector<int> vConnectedSocketFDs;
 	bool bRun = true;
 	while (bRun) {
-		int iPollRes = poll(vecPollListenFD.data(), vecPollListenFD.size(), iConnectionTimeout);
+		int iPollRes = poll(m_vecPollListenFD.data(), m_vecPollListenFD.size(), iConnectionTimeout);
 		if (iPollRes < 0) {
 			DBG_PRINT("Error ", iPollRes, " on poll: %s\n", strerror(errno));
 			bRun = false;
@@ -167,16 +169,16 @@ void ConnectionProxy::_start(const int port, const int iConnectionTimeout) {
 			bRun = false;
 			break;
 		}
-		for (unsigned int i = 0; i < vecPollListenFD.size(); i++) {
-			if (vecPollListenFD[i].revents == 0)
+		for (unsigned int i = 0; i < m_vecPollListenFD.size(); i++) {
+			if (m_vecPollListenFD[i].revents == 0)
 				continue;
-			if (vecPollListenFD[i].revents & POLLERR) {
-				printf("%s Error! vecPollFDs[%d].revents = %d\n", __PRETTY_FUNCTION__, i, vecPollListenFD[i].revents);
+			if (m_vecPollListenFD[i].revents & POLLERR) {
+				printf("%s Error! vecPollFDs[%d].revents = %d\n", __PRETTY_FUNCTION__, i, m_vecPollListenFD[i].revents);
 				bRun = false;
 				break;
 			}
 
-			if (vecPollListenFD[i].fd == sockListen) {
+			if (m_vecPollListenFD[i].fd == sockListen) {
 				std::vector<int> v = AcceptIncomingConnections(sockListen);//can return 1 or 2
 				vConnectedSocketFDs.insert(vConnectedSocketFDs.end(), v.begin(), v.end());
 				//printf("ConnectionProxy accepted %zu incoming connections\n", vConnectedSocketFDs.size());
@@ -188,24 +190,24 @@ void ConnectionProxy::_start(const int port, const int iConnectionTimeout) {
 					vConnectedSocketFDs.clear();//FDs of a connected 2 clients are already closed in StartDataExchange
 					//we do not have connected clients anymore
 					//poll only on sockListen and m_efd
-					if (vecPollListenFD.size() > 2)
-						vecPollListenFD.erase(vecPollListenFD.begin() + 2, vecPollListenFD.end());
+					if (m_vecPollListenFD.size() > 2)
+						m_vecPollListenFD.erase(m_vecPollListenFD.begin() + 2, m_vecPollListenFD.end());
 				} else if(vConnectedSocketFDs.size() == 1) {
 					//if first client was connected
 					//poll, not for data is ready to read, but for a connection was closed (POLLRDHUP)
-					vecPollListenFD.push_back(pollfd {vConnectedSocketFDs[0], POLLRDHUP});
+					m_vecPollListenFD.push_back(pollfd {vConnectedSocketFDs[0], POLLRDHUP});
 				}
-			} else if ((vConnectedSocketFDs.size() > 0) && (vecPollListenFD[i].fd == vConnectedSocketFDs[0])) {
-				if (vecPollListenFD[i].revents & POLLRDHUP) {
-					DBG_PRINT("received POLLRDHUP for fd=", vecPollListenFD[i].fd);
+			} else if ((vConnectedSocketFDs.size() > 0) && (m_vecPollListenFD[i].fd == vConnectedSocketFDs[0])) {
+				if (m_vecPollListenFD[i].revents & POLLRDHUP) {
+					DBG_PRINT("received POLLRDHUP for fd=", m_vecPollListenFD[i].fd);
 					close(vConnectedSocketFDs[0]);
 					DBG_PRINT("closed fd=", vConnectedSocketFDs[0]);
 					vConnectedSocketFDs.clear();
-					vecPollListenFD.erase(vecPollListenFD.begin() + i);
+					m_vecPollListenFD.erase(m_vecPollListenFD.begin() + i);
 				} else {
-					fprintf(stderr, "Error vecPollListenFD[i].revents & POLLRDHUP=%d", vecPollListenFD[i].revents);
+					fprintf(stderr, "Error vecPollListenFD[i].revents & POLLRDHUP=%d", m_vecPollListenFD[i].revents);
 				}
-			} else if (vecPollListenFD[i].fd == m_efd) {
+			} else if (m_vecPollListenFD[i].fd == m_efd) {
 				bRun = false;
 				break;
 			}

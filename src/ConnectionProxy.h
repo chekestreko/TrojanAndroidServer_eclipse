@@ -11,7 +11,7 @@
 class ConnectionProxy {
 public:
 	ConnectionProxy();
-	std::vector<int> AcceptIncomingConnections(int iFD);
+	std::vector<int> AcceptIncomingConnections(const int iFD);
 	void Start(const int port);
 	void Stop();
 	virtual ~ConnectionProxy();
@@ -19,10 +19,9 @@ private:
 	void _start(const int port, const int iConnectionTimeout);
 	bool StartDataExchange(std::vector<int>& vFDs);
 	int SetupListenSoket(const int port);
-	void SetFDnoneBlocking(int iFD);
 	std::thread m_myThread;
-	std::vector<pollfd> vecPollListenFD;
-	std::thread t;
+	std::vector<pollfd> m_vecPollListenFD;
+	std::thread m_t;
 	int m_efd;
 };
 
