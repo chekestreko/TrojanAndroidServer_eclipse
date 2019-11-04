@@ -88,9 +88,11 @@ void SendData2Client(const int iFD, const std::string& str_buf) {
 					}
 					continue;
 				}
+			} else {
+				std::cerr << std::string("send returned error:") << errno << std::endl;
+				lambdaFD_close();
+				break;
 			}
-			std::cerr << std::string("send returned error:") << errno << std::endl;
-			lambdaFD_close();
 		} else {
 			sent_all += sent;
 		}
@@ -165,6 +167,21 @@ void ParseCommand(const Client& clientFrom, const std::string& strLine) {
 	}
 }
 
+bool CheckReadByte(const unsigned char b, const int fd) {
+	if ((b >= 32 && b <= 126) || (b == '\n'))
+		return true;
+	auto client = clients.FindClientBySockFD(fd);
+	if (client) {
+		Journal::get().WriteLn("Read invalid character from client: '",
+				client->get().GetStrID(), "', closing fd=", fd, "\n");
+		clients.RemoveClientBySockFD(fd);
+	} else {
+		Journal::get().WriteLn("Read invalid character (no client), closing fd=", fd, "\n");
+	}
+	AddFD2BeClosed(fd);
+	return false;
+}
+
 void ReadDataFromClient(const unsigned int fd) {
 	std::function fConnClosed = [&fd](std::string const& strLog){
 		Journal::get().WriteLn(strLog, fd, "\n");
@@ -173,7 +190,7 @@ void ReadDataFromClient(const unsigned int fd) {
 			Journal::get().WriteLn("removing client: ", client->get().GetStrID(), "\n");
 			clients.RemoveClientBySockFD(fd);
 		} else {
-			Journal::get().WriteLn("closing connection for an unknown client, fd=%d\n", fd);
+			Journal::get().WriteLn("closing connection for an unknown client, fd=", fd, "\n");
 		}
 		AddFD2BeClosed(fd);
 	};
@@ -182,7 +199,7 @@ void ReadDataFromClient(const unsigned int fd) {
 		int rc = recv(fd, &byteRead, sizeof(byteRead), 0);
 		if (rc < 0) {
 			if (errno == EWOULDBLOCK)//no more data to read, just exit and poll
-				break;
+				return;
 			if (errno == EINTR)
 				continue;
 			fConnClosed(std::string("Recv error errno=") + std::to_string(errno) + ", fd=");
@@ -191,6 +208,9 @@ void ReadDataFromClient(const unsigned int fd) {
 			fConnClosed(std::string("Remote peer gracefully closed a socket fd="));
 			break;
 		} else {	//read a data
+			if(!CheckReadByte(byteRead, fd)) {
+				return;
+			}
 			if (byteRead == '\n') {
 				std::string& strLine = mapReadLineFromFD[fd].strLine;
 				//printf("readline: %s\n", strLine.c_str());
