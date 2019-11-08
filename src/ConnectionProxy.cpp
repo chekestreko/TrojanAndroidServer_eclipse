@@ -141,7 +141,7 @@ void ConnectionProxy::Stop() {
 		uint64_t u;
 		DBG_PRINT("Stopping ConnectionProxy...");
 		if(sizeof(u) != write(m_efd, &u, sizeof(u)))
-			DBG_PRINT("Error stopping ConnectionProxy sizeof(u) != write...");
+			DBG_PRINT("m_efd write failed, thread do not run anymore. No error.");
 		m_t.join();
 		DBG_PRINT("ConnectionProxy...stopped");
 		m_efd = -1;

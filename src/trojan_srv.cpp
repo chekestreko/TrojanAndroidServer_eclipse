@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <inttypes.h>
+#include <cstddef>
+#include <iomanip>
 #include <vector>
 #include <map>
 #include <algorithm>
@@ -170,14 +172,17 @@ void ParseCommand(const Client& clientFrom, const std::string& strLine) {
 bool CheckReadByte(const unsigned char b, const int fd) {
 	if ((b >= 32 && b <= 126) || (b == '\n'))
 		return true;
+	std::stringstream ss;
+	ss << "Read invalid character 0x" << std::setfill('0') << std::setw(2) << std::hex
+			<< (0xff&(unsigned int)b) << " from client: '";
 	auto client = clients.FindClientBySockFD(fd);
 	if (client) {
-		Journal::get().WriteLn("Read invalid character from client: '",
-				client->get().GetStrID(), "', closing fd=", fd, "\n");
+		ss << client->get().GetStrID();
 		clients.RemoveClientBySockFD(fd);
 	} else {
-		Journal::get().WriteLn("Read invalid character (no client), closing fd=", fd, "\n");
+		ss << "unknown client";
 	}
+	Journal::get().WriteLn(ss.str(), "', closing fd=", fd, "\n");
 	AddFD2BeClosed(fd);
 	return false;
 }
